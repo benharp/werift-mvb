@@ -1,0 +1,7 @@
+# VSCode configuration
+.vscode/
+
+# Node Modules
+node_modules/
+vic-standin/gui/web_modules/
+package-lock.json

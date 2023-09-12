@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  </head>
+  <body>
+    <button id="start">Add Remote track</button>
+    <button id="stop">Remove Remote track</button>
+    <button id="local">Add local track</button>
+    <pre id="info"></pre>
+    <pre id="bundle"></pre>
+    <script crossorigin type="module">
+        import { io } from "https://cdn.socket.io/4.4.1/socket.io.esm.min.js";
+        const socket = io(`${"http://localhost"}:${4000}`);
+
+        const peer = new RTCPeerConnection();
+        
+        console.log("Connected!")
+
+        async function renegotiate() {
+            await peer.setLocalDescription(await peer.createOffer());
+            socket.emit("signal", peer.localDescription);
+        }
+
+        function updateTransceiverList() {
+            let list = "Transceivers:";
+            peer.getTransceivers().forEach((tran) => {
+                list = list.concat(` ${tran.mid}: ${tran.currentDirection},`);
+            })
+            document.getElementById("info").textContent = list;
+        }
+
+        socket.on("signal", async (data) => {
+            if (data.type === "offer") {
+                await peer.setRemoteDescription(data);
+                await peer.setLocalDescription(await peer.createAnswer());
+                document.getElementById("bundle").textContent = "Received offer bundle:" + data.sdp.match(/(BUNDLE.*)/g) + ". Sending answer bundle:" + peer.localDescription.sdp.match(/(BUNDLE.*)/g);
+                socket.emit("signal", peer.localDescription)
+                updateTransceiverList();
+            } else if (data.type === "answer") {
+                document.getElementById("bundle").textContent = "Received answer bundle:" + data.sdp.match(/(BUNDLE.*)/g) + ". Previously offered:" + peer.localDescription.sdp.match(/(BUNDLE.*)/g);
+                await peer.setRemoteDescription(data);
+                updateTransceiverList();
+            }
+        });
+
+
+        document.getElementById("start").onclick = function() {
+            console.log("ask for new track to receive")
+            socket.emit("add track")
+        };
+
+        document.getElementById("stop").onclick = function() {
+            console.log("stop a track")
+            socket.emit("remove track")
+        }
+
+        document.getElementById("local").onclick = async function() {
+            console.log("add microphone and track")
+            peer.addTransceiver("audio", { direction: "sendonly" });
+            await renegotiate();
+            console.log("added mic")
+        }
+    </script>
+    <div>
+
+    </div>
+  </body>
+</html>
