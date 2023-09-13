@@ -10,8 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "socket.io": "^4.7.2",
-    "socket.io-client": "^4.7.2",
-    "werift": "^0.18.5"
+    "werift": "^0.18.5",
+    "ws": "^8.14.1"
   }
 }

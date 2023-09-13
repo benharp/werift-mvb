@@ -11,16 +11,16 @@
     <pre id="info"></pre>
     <pre id="bundle"></pre>
     <script crossorigin type="module">
-        import { io } from "https://cdn.socket.io/4.4.1/socket.io.esm.min.js";
-        const socket = io(`${"http://localhost"}:${4000}`);
-
+        const socket = new WebSocket("ws://localhost:8080");
         const peer = new RTCPeerConnection();
-        
-        console.log("Connected!")
+
+        const send = (type, payload) => {
+            socket.send(JSON.stringify({ type, payload }));
+        };
 
         async function renegotiate() {
             await peer.setLocalDescription(await peer.createOffer());
-            socket.emit("signal", peer.localDescription);
+            send(peer.localDescription.type, peer.localDescription);
         }
 
         function updateTransceiverList() {
@@ -31,16 +31,22 @@
             document.getElementById("info").textContent = list;
         }
 
-        socket.on("signal", async (data) => {
-            if (data.type === "offer") {
-                await peer.setRemoteDescription(data);
+        socket.addEventListener("open", (event) => {
+            console.log("Connected!")
+        });
+
+        socket.addEventListener("message", async (event) => {
+            const { type, payload } = JSON.parse(event.data);
+            const { sdp } = payload;
+            if (type === "offer") {
+                await peer.setRemoteDescription(sdp);
                 await peer.setLocalDescription(await peer.createAnswer());
-                document.getElementById("bundle").textContent = "Received offer bundle:" + data.sdp.match(/(BUNDLE.*)/g) + ". Sending answer bundle:" + peer.localDescription.sdp.match(/(BUNDLE.*)/g);
-                socket.emit("signal", peer.localDescription)
+                document.getElementById("bundle").textContent = "Received offer bundle:" + sdp.sdp.match(/(BUNDLE.*)/g) + ". Sending answer bundle:" + peer.localDescription.sdp.match(/(BUNDLE.*)/g);
+                send("answer", peer.localDescription);
                 updateTransceiverList();
-            } else if (data.type === "answer") {
-                document.getElementById("bundle").textContent = "Received answer bundle:" + data.sdp.match(/(BUNDLE.*)/g) + ". Previously offered:" + peer.localDescription.sdp.match(/(BUNDLE.*)/g);
-                await peer.setRemoteDescription(data);
+            } else if (type === "answer") {
+                document.getElementById("bundle").textContent = "Received answer bundle:" + sdp.sdp.match(/(BUNDLE.*)/g) + ". Previously offered:" + peer.localDescription.sdp.match(/(BUNDLE.*)/g);
+                await peer.setRemoteDescription(sdp);
                 updateTransceiverList();
             }
         });
@@ -48,16 +54,16 @@
 
         document.getElementById("start").onclick = function() {
             console.log("ask for new track to receive")
-            socket.emit("add track")
+            send("add track")
         };
 
         document.getElementById("stop").onclick = function() {
             console.log("stop a track")
-            socket.emit("remove track")
+            send("remove track")
         }
 
         document.getElementById("local").onclick = async function() {
-            console.log("add microphone and track")
+            console.log("add local transceiver, which is dependant on werift's answer code")
             peer.addTransceiver("audio", { direction: "sendonly" });
             await renegotiate();
             console.log("added mic")
